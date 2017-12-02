@@ -483,6 +483,17 @@ class RoutingModel {
       const std::function<int64(int64)>& f, int64 domain_start,
       int64 domain_end);
 #endif  // SWIG
+
+bool AddDimensionDependentDimensionWithVehicleCapacity2(
+	  NodeEvaluator2* pure_transits,
+	  const std::function<int64(int64, int64, int64)> dependent_transits_f,
+	  int64 domain_start,
+      int64 domain_end,
+	  const RoutingDimension* base_dimension, int64 slack_max,
+	  std::vector<int64> vehicle_capacities, bool fix_start_cumul_to_zero,
+	  const std::string& name);
+    
+
   // Outputs the names of all dimensions added to the routing engine.
   // TODO(user): rename.
   std::vector<::std::string> GetAllDimensionNames() const;
@@ -1461,6 +1472,21 @@ class RoutingDimension {
       int64 index) const;
 #endif
 
+void SetCumulVarPiecewiseLinearCost2(
+    RoutingModel::NodeIndex node,
+    std::vector<int64> points_x, std::vector<int64> points_y,
+    std::vector<int64> slopes, std::vector<int64> other_points_x
+  );
+void SetStartCumulVarPiecewiseLinearCost2(
+    int vehicle,
+    std::vector<int64> points_x, std::vector<int64> points_y,
+    std::vector<int64> slopes, std::vector<int64> other_points_x
+  );
+void SetEndCumulVarPiecewiseLinearCost2(
+    int vehicle,
+    std::vector<int64> points_x, std::vector<int64> points_y,
+    std::vector<int64> slopes, std::vector<int64> other_points_x
+  );
   // Sets a soft upper bound to the cumul variable of a given node. If the
   // value of the cumul variable is greater than the bound, a cost proportional
   // to the difference between this value and the bound is added to the cost

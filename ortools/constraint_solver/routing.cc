@@ -974,6 +974,44 @@ bool RoutingModel::AddDimensionDependentDimensionWithVehicleCapacity(
       fix_start_cumul_to_zero, name);
 }
 
+class MKVariableNodeEvaluator2 {
+ public:
+  MKVariableNodeEvaluator2(RoutingModel* model, const std::function<int64(int64, int64, int64)> dependent_transits_f, int64 domain_start, int64 domain_end) {
+    model_ = model;
+    dependent_transits_f_ = dependent_transits_f;
+    domain_start_ = domain_start;
+    domain_end_ = domain_end;
+  }
+  RoutingModel::StateDependentTransit MKTransit(RoutingModel::NodeIndex from, RoutingModel::NodeIndex to) const {
+    std::function<int64(int64)> f_ = std::bind(dependent_transits_f_, model_->NodeToIndex(from), model_->NodeToIndex(to), std::placeholders::_1);
+    return RoutingModel::MakeStateDependentTransit(f_, domain_start_, domain_end_);
+  }
+  RoutingModel* model_;
+  std::function<int64(int64, int64, int64)> dependent_transits_f_ = NULL;
+  int64 domain_start_;
+  int64 domain_end_;
+};
+
+bool RoutingModel::AddDimensionDependentDimensionWithVehicleCapacity2(
+    NodeEvaluator2* pure_transits,
+    const std::function<int64(int64, int64, int64)> dependent_transits_f,
+    int64 domain_start,
+      int64 domain_end,
+    const RoutingDimension* base_dimension, int64 slack_max,
+    std::vector<int64> vehicle_capacities, bool fix_start_cumul_to_zero,
+    const std::string& name) {
+  std::vector<NodeEvaluator2*> pure_evaluators(vehicles_, pure_transits);
+  MKVariableNodeEvaluator2 mvme(this, dependent_transits_f, domain_start, domain_end);
+  VariableNodeEvaluator2* dependent_transits = NewPermanentCallback(&mvme, &MKVariableNodeEvaluator2::MKTransit);
+  std::vector<VariableNodeEvaluator2*> transit_evaluators(vehicles_,
+                                                          dependent_transits);
+  return AddDimensionDependentDimensionWithVehicleCapacityInternal(
+    pure_evaluators, transit_evaluators, base_dimension, slack_max,
+    std::move(vehicle_capacities), fix_start_cumul_to_zero, name);
+}
+
+
+
 RoutingModel::StateDependentTransit RoutingModel::MakeStateDependentTransit(
     const std::function<int64(int64)>& f, int64 domain_start,
     int64 domain_end) {
@@ -5120,6 +5158,40 @@ void RoutingDimension::SetCumulVarPiecewiseLinearCost(
   }
   VLOG(2) << "Cannot set piecewise linear cost on start or end nodes";
 }
+
+void RoutingDimension::SetCumulVarPiecewiseLinearCost2(
+    RoutingModel::NodeIndex node,
+    std::vector<int64> points_x, std::vector<int64> points_y,
+    std::vector<int64> slopes, std::vector<int64> other_points_x
+  ) {
+  if (model_->HasIndex(node)) {
+    const int64 index = model_->NodeToIndex(node);
+    if (!model_->IsStart(index) && !model_->IsEnd(index)) {
+      PiecewiseLinearFunction* cost = PiecewiseLinearFunction::CreatePiecewiseLinearFunction(points_x, points_y, slopes, other_points_x);
+      SetCumulVarPiecewiseLinearCostFromIndex(index, *cost);
+      return;
+    }
+  }
+  VLOG(2) << "Cannot set piecewise linear cost on start or end nodes";
+}
+
+void RoutingDimension::SetStartCumulVarPiecewiseLinearCost2(
+    int vehicle,
+    std::vector<int64> points_x, std::vector<int64> points_y,
+    std::vector<int64> slopes, std::vector<int64> other_points_x
+  ) {
+    PiecewiseLinearFunction* cost = PiecewiseLinearFunction::CreatePiecewiseLinearFunction(points_x, points_y, slopes, other_points_x);
+    SetCumulVarPiecewiseLinearCostFromIndex(model_->Start(vehicle), *cost);
+  }
+void RoutingDimension::SetEndCumulVarPiecewiseLinearCost2(
+    int vehicle,
+    std::vector<int64> points_x, std::vector<int64> points_y,
+    std::vector<int64> slopes, std::vector<int64> other_points_x
+  ) {
+    PiecewiseLinearFunction* cost = PiecewiseLinearFunction::CreatePiecewiseLinearFunction(points_x, points_y, slopes, other_points_x);
+    SetCumulVarPiecewiseLinearCostFromIndex(model_->End(vehicle), *cost);
+  }
+
 
 void RoutingDimension::SetStartCumulVarPiecewiseLinearCost(
     int vehicle, const PiecewiseLinearFunction& cost) {
